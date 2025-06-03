@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'lidar_node = robot_core.lidar_node:main',
             'arm_serial_node = robot_core.arm_serial_node:main',
+            'fsm_controller_node = robot_core.fsm_controller_node:main',
         ],
     },
 )
