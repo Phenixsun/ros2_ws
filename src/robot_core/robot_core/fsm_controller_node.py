@@ -1,9 +1,11 @@
 import rclpy
+import math
 from rclpy.node import Node
 from std_msgs.msg import String
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
 from geometry_msgs.msg import PoseStamped
+from tf_transformations import quaternion_from_euler
 from enum import Enum
 import time
 import serial
@@ -130,14 +132,22 @@ class FSMController(Node):
         if pose is None:
             self.get_logger().error(f"❌ NAV_GOAL '{location_name}' not found in YAML")
             return
+
+        yaw_rad = pose.get('yaw', 0.0)
+        quat = quaternion_from_euler(0, 0, yaw_rad)
+
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose.header.frame_id = "map"
         goal_msg.pose.header.stamp = self.get_clock().now().to_msg()
         goal_msg.pose.pose.position.x = pose['x']
         goal_msg.pose.pose.position.y = pose['y']
-        goal_msg.pose.pose.orientation.w = 1.0
+        goal_msg.pose.pose.orientation.x = quat[0]
+        goal_msg.pose.pose.orientation.y = quat[1]
+        goal_msg.pose.pose.orientation.z = quat[2]
+        goal_msg.pose.pose.orientation.w = quat[3]
+
         self.current_goal = self.nav_client.send_goal_async(goal_msg)
-        self.get_logger().info(f"🚗 Sending goal to {location_name}: ({pose['x']}, {pose['y']})")
+        self.get_logger().info(f"🚗 Sending goal to {location_name}: ({pose['x']}, {pose['y']} | yaw: {yaw_rad} rad)")
 
     def goal_reached(self):
         if self.current_goal is None:

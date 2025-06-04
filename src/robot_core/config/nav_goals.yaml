@@ -6,17 +6,17 @@ pickup_zone:
 room1:
   x: 3.0
   y: 1.0
-  yaw: 0.0
+  yaw: 1.57
 
 room2:
   x: 3.0
   y: 3.0
-  yaw: 0.0
+  yaw: 3.14
 
 room3:
   x: 1.0
   y: 3.0
-  yaw: 0.0
+  yaw: -1.57
 
 start:
   x: 0.0
