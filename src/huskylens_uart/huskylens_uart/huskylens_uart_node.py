@@ -9,8 +9,8 @@ class HuskyLensUARTNode(Node):
         self.publisher_ = self.create_publisher(String, 'huskylens_data', 10)
         
         try:
-            self.serial_port = serial.Serial('/dev/ttyAMA0', 9600, timeout=1)
-            self.get_logger().info('HuskyLens connected on /dev/ttyAMA0')
+            self.serial_port = serial.Serial('/dev/huskylens', 9600, timeout=1)
+            self.get_logger().info('HuskyLens connected on /dev/huskylens')
         except serial.SerialException as e:
             self.get_logger().error(f'Cannot open serial port: {e}')
             exit(1)

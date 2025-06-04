@@ -6,18 +6,18 @@ from ament_index_python.packages import get_package_share_directory
 import os
 
 def generate_launch_description():
-    # RPLiDAR
+    # ==== RPLiDAR Node ====
     rplidar_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory('rplidar_ros'), 'launch', 'rplidar_c1_launch.py')
+            os.path.join(get_package_share_directory('rplidar_ros'), 'launch', 'view_rplidar_c1_launch.py')
         ),
         launch_arguments={
-            'serial_port': '/dev/ttyUSB0',  # หรือใช้ '/dev/rplidar' ถ้าสร้าง symlink ไว้
+            'serial_port': '/dev/rplidar',
             'serial_baudrate': '460800'
         }.items()
     )
 
-    # Robot Description (URDF)
+    # ==== Robot Description ====
     urdf_file = os.path.join(get_package_share_directory('my_robot_description'), 'urdf', 'my_robot.urdf')
     with open(urdf_file, 'r') as infp:
         robot_description = infp.read()
@@ -30,7 +30,7 @@ def generate_launch_description():
         parameters=[{'robot_description': robot_description}]
     )
 
-    # Static Transform: base_link -> laser
+    # ==== Static Transform ====
     static_tf = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -38,14 +38,14 @@ def generate_launch_description():
         arguments=['0', '0', '0.1', '0', '0', '0', 'base_link', 'laser']
     )
 
-    # SLAM Toolbox
+    # ==== SLAM Toolbox ====
     slam_toolbox = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory('slam_toolbox'), 'launch', 'online_async_launch.py')
         )
     )
 
-    # Huskylens UART Node
+    # ==== Huskylens UART Node ====
     huskylens_node = Node(
         package='huskylens_uart',
         executable='huskylens_node',
@@ -53,7 +53,7 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Mecanum Motor Node
+    # ==== Motor Driver ====
     mecanum_motor_node = Node(
         package='mecanum_driver',
         executable='motor_node',
@@ -61,7 +61,7 @@ def generate_launch_description():
         output='screen'
     )
 
-    # Arm Controller (ผ่าน UART to Arduino)
+    # ==== Arm Controller (Arduino) ====
     arm_serial_node = Node(
         package='robot_core',
         executable='arm_serial_node',
@@ -69,17 +69,17 @@ def generate_launch_description():
         output='screen'
     )
 
-    # (Optional) Navigation2 - ถ้าคุณตั้งค่าเสร็จแล้ว
-    # nav2_launch = IncludeLaunchDescription(
-    #     PythonLaunchDescriptionSource(
-    #         os.path.join(get_package_share_directory('navigation2'), 'bringup', 'launch', 'bringup_launch.py')
-    #     ),
-    #     launch_arguments={
-    #         'map': '/home/robokae/maps/office.yaml',
-    #         'use_sim_time': 'false',
-    #         'params_file': '/home/robokae/ros2_ws/src/navigation2/params/nav2_params.yaml'
-    #     }.items()
-    # )
+    # ==== Navigation2 Bringup ====
+    nav2_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(get_package_share_directory('nav2_bringup'), 'launch', 'bringup_launch.py')
+        ),
+        launch_arguments={
+            'map': '/home/robokae/maps/office.yaml',
+            'use_sim_time': 'false',
+            'params_file': '/home/robokae/ros2_ws/src/navigation2/params/nav2_params.yaml'
+        }.items()
+    )
 
     return LaunchDescription([
         rplidar_launch,
@@ -89,5 +89,5 @@ def generate_launch_description():
         huskylens_node,
         mecanum_motor_node,
         arm_serial_node,
-        # nav2_launch  # uncomment ถ้าต้องการ
+        nav2_launch
     ])
