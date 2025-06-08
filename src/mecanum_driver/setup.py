@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'motor_node = mecanum_driver.motor_node:main',
+            'motor_node = mecanum_driver.mecanum_motor_node:main',
         ],
     },
 )

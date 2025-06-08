@@ -48,8 +48,8 @@ def generate_launch_description():
     # ==== Huskylens UART Node ====
     huskylens_node = Node(
         package='huskylens_uart',
-        executable='huskylens_node',
-        name='huskylens_node',
+        executable='huskylens_uart_node',
+        name='huskylens_uart_node',
         output='screen'
     )
 
@@ -75,9 +75,13 @@ def generate_launch_description():
             os.path.join(get_package_share_directory('nav2_bringup'), 'launch', 'bringup_launch.py')
         ),
         launch_arguments={
-            'map': '/home/robokae/maps/office.yaml',
+            'map': os.path.join(
+                get_package_share_directory('my_robot_bringup'), 'config', 'office.yaml'
+            ),
             'use_sim_time': 'false',
-            'params_file': '/home/robokae/ros2_ws/src/navigation2/params/nav2_params.yaml'
+            'params_file': os.path.join(
+                get_package_share_directory('navigation2'), 'params', 'nav2_params.yaml'
+            )
         }.items()
     )
 
