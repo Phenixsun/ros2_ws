@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
 import serial
 import time
 
@@ -10,20 +11,26 @@ class ArmSerialNode(Node):
 
         try:
             self.ser = serial.Serial('/dev/arduino_arm', 9600, timeout=1)
-            time.sleep(2)  # รอให้ Arduino reset
-            self.get_logger().info("✅ Connected to /dev/ttyUSB1")
-
-            # ตัวอย่าง: ส่งคำสั่ง PICK ทุก 10 วินาที
-            self.create_timer(10.0, self.send_pick)
-
+            time.sleep(2)  # รอให้ Arduino Reset
+            self.get_logger().info("✅ Connected to /dev/arduino_arm")
         except serial.SerialException as e:
             self.get_logger().error(f"❌ Serial error: {e}")
             self.ser = None
 
-    def send_pick(self):
+        self.subscription = self.create_subscription(
+            String,
+            '/arm_command',
+            self.command_callback,
+            10
+        )
+
+    def command_callback(self, msg):
         if self.ser:
-            self.ser.write(b'PICK\n')
-            self.get_logger().info("📤 Sent: PICK")
+            command = msg.data.strip() + '\n'
+            self.ser.write(command.encode())
+            self.get_logger().info(f"📤 Sent to Arduino: {command.strip()}")
+        else:
+            self.get_logger().warn("⚠️ No serial connection available.")
 
 def main(args=None):
     rclpy.init(args=args)
