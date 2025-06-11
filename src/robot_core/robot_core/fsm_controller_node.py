@@ -33,8 +33,15 @@ class FSMController(Node):
         self.goal_pub = self.create_publisher(String, 'navigation/goal', 10)
         self.nav_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
         self.current_goal = None
-        self.object_count = 0
+        self.detected_objects = []
         self.state_enter_time = time.time()
+
+        self.subscription = self.create_subscription(
+            String,
+            '/huskylens/objects',
+            self.huskylens_callback,
+            10
+        )
 
         try:
             self.arduino = serial.Serial('/dev/ttyUSB1', 9600, timeout=1)
@@ -43,6 +50,13 @@ class FSMController(Node):
         except Exception as e:
             self.get_logger().error(f"❌ Arduino connection failed: {e}")
             self.arduino = None
+
+        self.object_to_angle = {
+            'brake_fluid_can': 90,
+            'multimeter': -90,
+            'inner_tube': 45,
+            'led_bulb': 90
+        }
 
         self.nav_goals = self.load_nav_goals()
         self.get_logger().info("FSM Controller Node Started")
@@ -70,6 +84,19 @@ class FSMController(Node):
         self.state = new_state
         self.state_enter_time = time.time()
 
+    def huskylens_callback(self, msg):
+        try:
+            object_name, confidence = msg.data.split(':')
+            confidence = int(confidence)
+            if confidence < 50:
+                self.get_logger().warn(f"⚠️ Confidence too low for {object_name} ({confidence}%)")
+                return
+            if object_name not in self.detected_objects:
+                self.detected_objects.append(object_name)
+                self.get_logger().info(f"🧠 Added object: {object_name}")
+        except Exception as e:
+            self.get_logger().error(f"⚠️ Invalid message format from HuskyLens: {e}")
+
     def state_machine(self):
         if self.state == RobotState.IDLE:
             self.send_navigation_goal('pickup_zone')
@@ -81,11 +108,18 @@ class FSMController(Node):
                 self.transition_state(RobotState.PICKUP_OBJECT)
 
         elif self.state == RobotState.PICKUP_OBJECT:
-            if self.wait_delay(1.5):
-                self.object_count += 1
-                self.get_logger().info(f"🤖 Picking object {self.object_count}")
-                self.send_arduino_command(f"pick_{self.object_count}")
-                self.transition_state(RobotState.PICKUP_OBJECT if self.object_count < 4 else RobotState.MOVE_TO_ROOM1)
+            if self.wait_delay(1.5) and self.detected_objects:
+                current_object = self.detected_objects.pop(0)
+                angle = self.object_to_angle.get(current_object, 0)
+                self.get_logger().info(f"🤖 Picking {current_object} → angle {angle}")
+                self.send_arduino_command(f"CMD:PICK:{angle}")
+                # Decide room based on object
+                if current_object in ['brake_fluid_can', 'multimeter']:
+                    self.transition_state(RobotState.MOVE_TO_ROOM1)
+                elif current_object == 'inner_tube':
+                    self.transition_state(RobotState.MOVE_TO_ROOM2)
+                elif current_object == 'led_bulb':
+                    self.transition_state(RobotState.MOVE_TO_ROOM3)
 
         elif self.state == RobotState.MOVE_TO_ROOM1:
             self.send_navigation_goal('room1')
@@ -94,34 +128,29 @@ class FSMController(Node):
         elif self.state == RobotState.PLACE_IN_ROOM1:
             if self.goal_reached() and self.wait_delay(1.0):
                 self.send_arduino_command("place_1")
-                time.sleep(1)
-                self.send_arduino_command("place_2")
-                self.send_navigation_goal('room2')
-                self.transition_state(RobotState.MOVE_TO_ROOM2)
+                self.transition_state(RobotState.PICKUP_OBJECT if self.detected_objects else RobotState.RETURN_TO_START)
 
         elif self.state == RobotState.MOVE_TO_ROOM2:
-            if self.goal_reached():
-                self.transition_state(RobotState.PLACE_IN_ROOM2)
+            self.send_navigation_goal('room2')
+            self.transition_state(RobotState.PLACE_IN_ROOM2)
 
         elif self.state == RobotState.PLACE_IN_ROOM2:
-            if self.wait_delay(1.0):
+            if self.goal_reached() and self.wait_delay(1.0):
                 self.send_arduino_command("place_3")
-                self.send_navigation_goal('room3')
-                self.transition_state(RobotState.MOVE_TO_ROOM3)
+                self.transition_state(RobotState.PICKUP_OBJECT if self.detected_objects else RobotState.RETURN_TO_START)
 
         elif self.state == RobotState.MOVE_TO_ROOM3:
-            if self.goal_reached():
-                self.transition_state(RobotState.PLACE_IN_ROOM3)
+            self.send_navigation_goal('room3')
+            self.transition_state(RobotState.PLACE_IN_ROOM3)
 
         elif self.state == RobotState.PLACE_IN_ROOM3:
-            if self.wait_delay(1.0):
+            if self.goal_reached() and self.wait_delay(1.0):
                 self.send_arduino_command("place_4")
-                self.send_navigation_goal('start')
-                self.transition_state(RobotState.RETURN_TO_START)
+                self.transition_state(RobotState.PICKUP_OBJECT if self.detected_objects else RobotState.RETURN_TO_START)
 
         elif self.state == RobotState.RETURN_TO_START:
-            if self.goal_reached():
-                self.transition_state(RobotState.DONE)
+            self.send_navigation_goal('start')
+            self.transition_state(RobotState.DONE)
 
         elif self.state == RobotState.DONE:
             self.get_logger().info("✅ Mission completed.")
@@ -169,3 +198,4 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     rclpy.shutdown()
+ 

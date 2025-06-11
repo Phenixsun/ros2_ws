@@ -10,7 +10,6 @@ class HuskyLensUARTNode(Node):
         super().__init__('huskylens_uart_node')
         self.publisher_ = self.create_publisher(String, '/huskylens/objects', 10)
 
-        # Mapping: Huskylens ID → ชื่อวัตถุ
         self.id_to_name = {
             1: 'brake_fluid_can',
             2: 'multimeter',
@@ -18,7 +17,6 @@ class HuskyLensUARTNode(Node):
             4: 'led_bulb'
         }
 
-        # ป้องกันการส่งซ้ำเร็วเกินไป
         self.last_sent_time = {}
         self.send_interval = 1.0  # วินาที
 
@@ -37,22 +35,23 @@ class HuskyLensUARTNode(Node):
             if not line:
                 return
 
-            # ตัวอย่างข้อความ: "ID:1"
-            match = re.search(r'ID:(\d+)', line)
+            # ค้นหา ID และ Confidence ในข้อความ
+            match = re.search(r'ID:(\d+).*?Confidence:(\d+)', line)
             if match:
                 obj_id = int(match.group(1))
+                confidence = int(match.group(2))
                 obj_name = self.id_to_name.get(obj_id, f'unknown_id_{obj_id}')
                 current_time = time.time()
 
-                # ตรวจสอบว่า object นี้ส่งครั้งล่าสุดเมื่อไร
                 last_time = self.last_sent_time.get(obj_name, 0)
                 if current_time - last_time >= self.send_interval:
                     self.last_sent_time[obj_name] = current_time
 
+                    # ส่งชื่อวัตถุ + confidence เช่น brake_fluid_can:82
                     msg = String()
-                    msg.data = obj_name
+                    msg.data = f'{obj_name}:{confidence}'
                     self.publisher_.publish(msg)
-                    self.get_logger().info(f'📤 Detected: {obj_name}')
+                    self.get_logger().info(f'📤 Detected: {obj_name} ({confidence}%)')
             else:
                 self.get_logger().warn(f'⚠️ Invalid data from HuskyLens: {line}')
 

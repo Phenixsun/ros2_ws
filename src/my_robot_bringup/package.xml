@@ -2,21 +2,36 @@
 <package format="3">
   <name>my_robot_bringup</name>
   <version>0.0.1</version>
-  <description>Bringup package for launching and configuring the robot system</description>
+  <description>Bringup package for launching and configuring the full robot system</description>
 
   <maintainer email="beeyond.ma@gmail.com">robokae</maintainer>
   <license>MIT</license>
 
-  <!-- Build tool dependency -->
+  <!-- Build tool -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <!-- Runtime dependencies -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
-  <exec_depend>slam_toolbox</exec_depend>
 
-  <!-- Optional: if using RViz config -->
+  <!-- Core system nodes -->
+  <exec_depend>robot_core</exec_depend>
+  <exec_depend>arm_controller</exec_depend>
+  <exec_depend>mecanum_driver</exec_depend>
+  <exec_depend>huskylens_interface</exec_depend>
+
+  <!-- SLAM and Navigation -->
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>nav2_bt_navigator</exec_depend>
+  <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>nav2_controller</exec_depend>
+  <exec_depend>nav2_planner</exec_depend>
+  <exec_depend>nav2_amcl</exec_depend>
+  <exec_depend>nav2_bringup</exec_depend>
+
+  <!-- Optional visualization -->
   <exec_depend>rviz2</exec_depend>
 
   <!-- Testing (optional) -->
