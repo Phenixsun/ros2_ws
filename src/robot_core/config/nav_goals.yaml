@@ -13,7 +13,7 @@ room2:
   y: 1.0
   yaw: -1.57
 
-room3:
+conveyor:
   x: 2.8
   y: 2.7
   yaw: 3.14

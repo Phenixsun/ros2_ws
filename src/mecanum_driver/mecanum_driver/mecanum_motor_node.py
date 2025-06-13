@@ -4,55 +4,57 @@ import rclpy
 from rclpy.node import Node
 import lgpio
 from geometry_msgs.msg import Twist
-import math
 
 class MecanumMotorNode(Node):
     def __init__(self):
         super().__init__('mecanum_motor_node')
 
-        self.chip = 0  # gpiochip0
-        self.handle = lgpio.gpiochip_open(self.chip)
+        self.chip = 4  # RPi 5
+        self.gpio_handle = lgpio.gpiochip_open(self.chip)
 
+        # DIR = ทิศทาง / PWM = ความเร็ว
         self.motor_pins = {
-            'FL': (17, 18),  # DIR, PWM
-            'FR': (22, 23),
-            'RL': (24, 25),
-            'RR': (5, 6),
+            'FL': {'DIR': 27, 'PWM': 12},
+            'FR': {'DIR': 23, 'PWM': 13},
+            'RL': {'DIR': 25, 'PWM': 18},
+            'RR': {'DIR': 16, 'PWM': 19},
         }
+
+        self.FREQ = 500
+        self.DUTY_LINEAR = 50
+        self.DUTY_TURN_LEFT = 60
+        self.DUTY_TURN_RIGHT = 80
 
         self.setup_gpio()
         self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
-        self.get_logger().info("✅ Mecanum Motor Node started using lgpio!")
+        self.get_logger().info("✅ Mecanum Motor Node started (lgpio)")
 
     def setup_gpio(self):
-        for name, (dir_pin, pwm_pin) in self.motor_pins.items():
-            try:
-                lgpio.gpio_claim_output(self.handle, dir_pin)
-                lgpio.gpio_claim_output(self.handle, pwm_pin)
-                lgpio.gpio_write(self.handle, pwm_pin, 0)
-                self.get_logger().info(f"✅ GPIO{dir_pin}, GPIO{pwm_pin} ready for motor {name}")
-            except Exception as e:
-                self.get_logger().error(f"❌ Failed to initialize motor {name}: {e}")
+        for name, pins in self.motor_pins.items():
+            lgpio.gpio_claim_output(self.gpio_handle, pins['DIR'])
+            lgpio.gpio_claim_output(self.gpio_handle, pins['PWM'])
+            lgpio.tx_pwm(self.gpio_handle, pins['PWM'], self.FREQ, 0)
+            lgpio.gpio_write(self.gpio_handle, pins['DIR'], 0)
+            self.get_logger().info(f"⚙️ Motor {name}: DIR={pins['DIR']} PWM={pins['PWM']} ready")
 
-    def set_motor(self, name, direction, speed_percent):
-        dir_pin, pwm_pin = self.motor_pins.get(name, (None, None))
-        if dir_pin is None or pwm_pin is None:
-            self.get_logger().warn(f"⚠️ Motor {name} is not configured.")
-            return
+    def set_motor(self, name, direction, duty):
+        pins = self.motor_pins[name]
+        lgpio.gpio_write(self.gpio_handle, pins['DIR'], 1 if direction >= 0 else 0)
+        lgpio.tx_pwm(self.gpio_handle, pins['PWM'], self.FREQ, duty)
 
-        try:
-            lgpio.gpio_write(self.handle, dir_pin, 1 if direction >= 0 else 0)
-            speed = max(0, min(100, abs(speed_percent)))
-            lgpio.tx_pwm(self.handle, pwm_pin, 20000, speed)  # 20 kHz PWM
-        except Exception as e:
-            self.get_logger().error(f"❌ Error setting motor {name}: {e}")
+    def stop_all(self):
+        for pins in self.motor_pins.values():
+            lgpio.tx_pwm(self.gpio_handle, pins['PWM'], self.FREQ, 0)
 
     def cmd_vel_callback(self, msg):
         vx = msg.linear.x
         vy = msg.linear.y
         omega = msg.angular.z
 
-        base_speed = 80  # ความเร็วพื้นฐาน 0-100
+        if vx == 0.0 and vy == 0.0 and omega == 0.0:
+            self.stop_all()
+            return
+
         directions = {
             'FL': vx - vy - omega,
             'FR': vx + vy + omega,
@@ -61,16 +63,19 @@ class MecanumMotorNode(Node):
         }
 
         for wheel, value in directions.items():
-            self.set_motor(wheel, math.copysign(1, value) if value else 0, base_speed if value else 0)
+            if vx != 0 or vy != 0:
+                duty = self.DUTY_LINEAR
+            elif omega < 0:
+                duty = self.DUTY_TURN_LEFT
+            else:
+                duty = self.DUTY_TURN_RIGHT
+
+            direction = 1 if value >= 0 else -1
+            self.set_motor(wheel, direction, duty if value != 0 else 0)
 
     def destroy_node(self):
-        for dir_pin, pwm_pin in self.motor_pins.values():
-            try:
-                lgpio.tx_pwm(self.handle, pwm_pin, 0, 0)
-                lgpio.gpio_write(self.handle, dir_pin, 0)
-            except Exception as e:
-                self.get_logger().warn(f"⚠️ Error releasing motor pins: {e}")
-        lgpio.gpiochip_close(self.handle)
+        self.stop_all()
+        lgpio.gpiochip_close(self.gpio_handle)
         super().destroy_node()
 
 def main(args=None):
